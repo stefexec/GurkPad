@@ -1,6 +1,6 @@
 /*  GurkPad - A very simple text editor made using a C tutorial.
  *
- *  Next step in course: 5. Saving to disk
+ *  Next step in course: 5. Dirty Flag
  *
  *
  */
@@ -13,6 +13,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -68,6 +69,10 @@ struct editorConfig {
 };
 
 struct editorConfig E;
+
+/*** prototypes */
+
+void editorSetStatusMessage(const char *fmt, ...);
 
 /*** terminal */
 
@@ -259,7 +264,7 @@ void editorInsertChar(int c) {
 char *editorRowsToString(int *buflen) {
   int totlen = 0;
   int j;
-  for (j = 0, j < E.numrows; j++) 
+  for (j = 0; j < E.numrows; j++) 
     totlen += E.row[j].size + 1;
   *buflen = totlen;
   
@@ -292,6 +297,28 @@ void editorOpen(char *filename) {
   }
   free(line);
   fclose(fp);
+}
+
+void editorSave() {
+  if (E.filename == NULL) return;
+
+  int len;
+  char *buf = editorRowsToString(&len);
+
+  int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+  if (fd != -1) {
+    if (ftruncate(fd, len) != -1) {
+      if (write(fd, buf, len) == len) {
+      close(fd);
+      free(buf);
+      editorSetStatusMessage("%d bytes written to disk", len);
+      return;
+    }
+  }
+  close(fd);
+  }
+  free(buf);
+  editorSetStatusMessage("Can't save! I/O Error: %s", strerror(errno));
 }
 
 /*** append buffer */
@@ -483,6 +510,10 @@ void editorProcessKeypress() {
       exit(0);
       break;
 
+    case CTRL_KEY('s'):
+      editorSave();
+      break;
+
     case HOME_KEY:
       E.cx = 0;
       break;
@@ -556,7 +587,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-Q to quit");
+  editorSetStatusMessage("HELP: CTRL-S to save | Ctrl-Q to quit");
 
 	while (1) {
     editorRefreshScreen();
