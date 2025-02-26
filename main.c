@@ -75,6 +75,8 @@ struct editorConfig E;
 /*** prototypes */
 
 void editorSetStatusMessage(const char *fmt, ...);
+void editorRefreshScreen();
+char *editorPrompt(char *prompt);
 
 /*** terminal */
 
@@ -145,7 +147,7 @@ int editorReadKey() {
           case 'F': return END_KEY; 
         }
       }
-    } else if (seq[0] == '0') {
+    } else if (seq[0] == 'O') {
       switch (seq[1]) {
         case 'H': return HOME_KEY;
         case 'F': return END_KEY;
@@ -215,7 +217,7 @@ void editorUpdateRow(erow *row) {
 
   int idx = 0;
   for (j = 0; j < row->size; j++) {
-    if (row-> chars[j] == '\t') {
+    if (row->chars[j] == '\t') {
       row->render[idx++] = ' ';
       while (idx % GPAD_TAB_STOP != 0) row->render[idx++] = ' ';
     } else {
@@ -311,7 +313,7 @@ void editorInsertNewline() {
 }
 
 void editorDelChar() {
-  if (E.cx == E.numrows) return;
+  if (E.cy == E.numrows) return;
   if (E.cx == 0 && E.cy == 0) return;
 
   erow *row = &E.row[E.cy];
@@ -368,7 +370,13 @@ void editorOpen(char *filename) {
 }
 
 void editorSave() {
-  if (E.filename == NULL) return;
+  if (E.filename == NULL) {
+    E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+    if (E.filename == NULL) {
+      editorSetStatusMessage("Save aborted");
+      return;
+    }
+  }
 
   int len;
   char *buf = editorRowsToString(&len);
@@ -525,6 +533,40 @@ void editorSetStatusMessage(const char *fmt, ...) {
 }
 
 /*** input */
+
+char *editorPrompt(char *prompt) {
+  size_t bufsize = 128;
+  char *buf = malloc(bufsize);
+
+  size_t buflen = 0;
+  buf[0] = '\0';
+
+  while (1) {
+    editorSetStatusMessage(prompt, buf);
+    editorRefreshScreen();
+
+    int c = editorReadKey();
+    if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+      if (buflen != 0) buf[--buflen] = '\0';
+    } else if (c == '\x1b') {
+      editorSetStatusMessage("");
+      free(buf);
+      return NULL;
+    } else if (c == '\r') {
+      if (buflen != 0) {
+        editorSetStatusMessage("");
+        return buf;
+      }
+    } else if (!iscntrl(c) && c < 128) {
+      if (buflen == bufsize - 1) {
+        bufsize *= 2;
+        buf = realloc(buf, bufsize);
+      }
+      buf[buflen++] = c;
+      buf[buflen] = '\0';
+    }
+  }
+}
 
 void editorMoveCursor(int key) {
   erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
