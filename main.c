@@ -27,7 +27,7 @@
 /*** defines */
 
 #define GPAD_VERSION "0.0.1"
-#define GPAD_TAB_STOP 8
+#define GPAD_TAB_STOP 4
 #define GPAD_QUIT_TIMES 3
 
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -204,6 +204,19 @@ int editorRowCxToRx(erow *row, int cx) {
     rx++;
   }
   return rx;
+}
+
+int editorRowRxtoCx(erow *row, int rx) {
+  int cur_rx = 0;
+  int cx;
+  for (cx = 0; cx < row->size; cx++) {
+    if (row->chars[cx] == '\t')
+      cur_rx += (GPAD_TAB_STOP - 1) - (cur_rx % GPAD_TAB_STOP);
+    cur_rx++;
+
+    if (cur_rx > rx) return cx;
+  }
+  return cx;
 }
 
 void editorUpdateRow(erow *row) {
@@ -396,6 +409,25 @@ void editorSave() {
   }
   free(buf);
   editorSetStatusMessage("Can't save! I/O Error: %s", strerror(errno));
+}
+
+void editorFind() {
+  char *query = editorPrompt("Search %s (ESC to cancel)");
+  if (query == NULL) return;
+
+  int i;
+  for (i = 0; i < E.numrows; i++) {
+    erow *row = &E.row[i];
+    char *match = strstr(row->render, query);
+    if (match) {
+      E.cy = i;
+      E.cx = editorRowRxtoCx(row, match - row->render);
+      E.rowoff = E.numrows;
+      break;
+    }
+  }
+
+  free(query);
 }
 
 /*** append buffer */
@@ -641,6 +673,10 @@ void editorProcessKeypress() {
         E.cx = E.row[E.cy].size;
       break;
 
+    case CTRL_KEY('f'):
+      editorFind();
+      break;
+
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
@@ -709,7 +745,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: CTRL-S to save | Ctrl-Q to quit");
+  editorSetStatusMessage("HELP: CTRL-S to save | Ctrl-Q to quit | Ctrl-F to search");
 
 	while (1) {
     editorRefreshScreen();
