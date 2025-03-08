@@ -27,7 +27,7 @@
 
 /*** defines */
 
-#define GPAD_VERSION "0.1.0"
+#define GPAD_VERSION "0.1.1"
 #define GPAD_TAB_STOP 4
 #define GPAD_QUIT_TIMES 3
 
